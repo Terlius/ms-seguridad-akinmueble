@@ -17,8 +17,9 @@ import {UserProfile} from '@loopback/security';
 import {securityConfig} from '../config/config.security';
 import {AuthenticationFactorByCode, Credentials, Login, PermissionsRoleMenu, User} from '../models';
 import {LoginRepository, UserRepository} from '../repositories';
-import {securityService} from '../services';
+import {NotificationsService, securityService} from '../services';
 import {AuthService} from '../services/auth.service';
+import {ConfiguracionNotificaciones} from '../config/notifications.config';
 
 export class UserController {
   constructor(
@@ -29,7 +30,9 @@ export class UserController {
     @repository(LoginRepository)
     public loginRepository: LoginRepository,
     @service(AuthService)
-    private serviceAuth: AuthService
+    private serviceAuth: AuthService,
+    @service(NotificationsService)
+    public notiService: NotificationsService
   ) { }
 
   @authenticate({
@@ -225,6 +228,16 @@ export class UserController {
       this.loginRepository.create(login);
       user.password = "";
       //notificar al usuario via correo o msg
+      let datos = {
+        correDestino:user.email,
+        nombreDestino:user.firstName + " " + user.firstSurname,
+        contenidoCorreo:`Su código 2FA es: ${codigo2fa}`,
+        asuntoCorreo: ConfiguracionNotificaciones.asunto2fa,
+      }
+
+      let url = ConfiguracionNotificaciones.urlNoti2fa;
+      this.notiService.EnviarCorreoElectronico(datos, url);
+
       return user;
     }
     return new HttpErrors[401]("incorrect credentials")
