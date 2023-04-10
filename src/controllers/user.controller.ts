@@ -15,7 +15,7 @@ import {
 } from '@loopback/rest';
 import {UserProfile} from '@loopback/security';
 import {securityConfig} from '../config/config.security';
-import {AuthenticationFactorByCode, Credentials, Login, PermissionsRoleMenu, User} from '../models';
+import {AuthenticationFactorByCode, CredencialesRecuperarClave, Credentials, Login, PermissionsRoleMenu, User} from '../models';
 import {LoginRepository, UserRepository} from '../repositories';
 import {NotificationsService, securityService} from '../services';
 import {AuthService} from '../services/auth.service';
@@ -229,19 +229,69 @@ export class UserController {
       user.password = "";
       //notificar al usuario via correo o msg
       let datos = {
-        correDestino:user.email,
+        correoDestino:user.email,
         nombreDestino:user.firstName + " " + user.firstSurname,
         contenidoCorreo:`Su código 2FA es: ${codigo2fa}`,
         asuntoCorreo: ConfiguracionNotificaciones.asunto2fa,
       }
 
       let url = ConfiguracionNotificaciones.urlNoti2fa;
-      this.notiService.EnviarCorreoElectronico(datos, url);
+      this.notiService.EnviarNotificacion(datos, url);
 
       return user;
     }
     return new HttpErrors[401]("incorrect credentials")
   }
+
+
+
+
+  @post('/recuperar-clave')
+  @response(200, {
+    description: "Identify user by email and password",
+    content: {'application/json': {schema: getModelSchemaRef(User)}}
+  })
+  async recuperarClaveUsuario(
+    @requestBody(
+      {
+        content: {
+          'application/json': {
+            schema: getModelSchemaRef(CredencialesRecuperarClave)
+          }
+        }
+      }
+    )
+    credentials: CredencialesRecuperarClave
+  ): Promise<object> {
+    let user = await this.userRepository.findOne({
+      where:{
+        email: credentials.correo
+      }
+    })
+    if (user) {
+      let nuevaClave = this.securityService.createRandomText(5);
+      console.log(nuevaClave);
+      let claveCifrada = this.securityService.encryptText(nuevaClave);
+      user.password = claveCifrada;
+      this.userRepository.updateById(user._id, user);
+      //notificar al usuario via correo o msg
+      let datos = {
+        numDestino: user.phone,
+
+        contenidoMensaje:`Hola ${user.firstName}, su nueva contraseña para la pagina de Akinmueble es: ${nuevaClave}`,
+
+      }
+
+      let url = ConfiguracionNotificaciones.urlNotiSMS
+      this.notiService.EnviarNotificacion(datos, url);
+
+      return user;
+    }
+    return new HttpErrors[401]("incorrect credentials")
+  }
+
+
+
 
 
 
